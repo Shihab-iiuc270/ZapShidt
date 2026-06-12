@@ -1,20 +1,61 @@
 import { useForm } from 'react-hook-form';
 import useAuth from '../../../hooks/useAuth';
 import SocialLogin from '../SocialLogin/SocialLogin';
-import { Link } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
+import axios from 'axios';
 
 const Register = () => {
     const {register,handleSubmit,formState:{errors}} = useForm();
-    const {registerUser} = useAuth();
+    const {registerUser,updateUserProfile} = useAuth();
+    const location = useLocation()
+    console.log('regis',location)
+    const navigate = useNavigate()
     const handleRegistration =(data) =>{
         console.log(data)
+        
+        const profileImg = data.photo[0];
         registerUser(data.email,data.password)
         .then(result => {
             console.log(result.user);
-        })
-        .catch(error =>{
-            console.log(error)
-        })
+
+             const formData = new FormData();
+                formData.append('image', profileImg);
+
+                // 2. send the photo to store and get the ul
+                const image_API_URL = `https://api.imgbb.com/1/upload?key=${import.meta.env.VITE_image_host_key}`
+
+                axios.post(image_API_URL, formData)
+                    .then(res => {
+                        const photoURL = res.data.data.url;
+
+                        // create user in the database
+                        // const userInfo = {
+                        //     emfail: data.email,
+                        //     displayName: data.name,
+                        //     photoURL: photoURL
+                        // }
+
+
+                        // update user profile to firebase
+                        const userProfile = {
+                            displayName: data.name,
+                            photoURL: photoURL
+                        }
+
+                        updateUserProfile(userProfile)
+                            .then(() => {
+                                console.log('user profile updated done.')
+                                navigate(location.state || '/');
+                            })
+                            .catch(error => console.log(error))
+                    })
+
+
+
+            })
+            .catch(error => {
+                console.log(error)
+            })
     }
     return (
          <div className="card bg-base-100 w-full max-w-sm mx-auto shrink-0 shadow-2xl">
@@ -22,9 +63,23 @@ const Register = () => {
             <p className="text-center">Register with ZapShift</p>
             <form  onSubmit={handleSubmit(handleRegistration)} className='card-body'>
             <fieldset className="fieldset">
+                {/* name */}
+          <label className="label text-black">Name</label>
+          <input type="text" {...register('name',{required:true})} className="input" placeholder="Name" />
+          {errors.name ?. type=='required' && <p className="text-red-500">Name is required</p>}
+
+          {/* photo */}
+          <label className="label text-black">Photo</label>
+          <input type="file" {...register('photo',{required:true})} className="file-input file-input-secondary " placeholder="Photo" />
+          {errors.photo ?. type=='required' && <p className="text-red-500">Photo is required</p>}
+
+          {/* email */}
           <label className="label text-black">Email</label>
           <input type="email" {...register('email',{required:true})} className="input" placeholder="Email" />
           {errors.email ?. type=='required' && <p className="text-red-500">Email is required</p>}
+
+
+          {/* //password */}
           <label className="label text-black">Password</label>
           <input type="password" {...register('password',{
             required:true,
@@ -39,9 +94,9 @@ const Register = () => {
           <div><a className="link link-hover">Forgot password?</a></div>
           <button className="btn btn-neutral bg-primary text-secondary mt-4">Register</button>
         </fieldset>
-        <p>Already have an account? <Link to="/login" className='underline text-blue-600'>LogIn</Link></p>
+        <p>Already have an account? <Link to="/login" state={location.state} className='underline text-blue-600'>LogIn</Link></p>
             </form>
-            <SocialLogin></SocialLogin>
+            <SocialLogin ></SocialLogin>
         </div>
     );
 };
