@@ -1,0 +1,219 @@
+import { useForm, useWatch } from 'react-hook-form';
+import { useLoaderData, useNavigate } from 'react-router';
+import Swal from 'sweetalert2';
+import useAxiosSecure from '../../hooks/useAxiosSecure';
+import useAuth from '../../hooks/useAuth';
+
+
+const SendParcel = () => {
+    const {register,handleSubmit,control,formState:{errors}} = useForm()
+    const {user} = useAuth()
+    const navigate = useNavigate()
+    const axiosSecure = useAxiosSecure()
+    const serviceCenters = useLoaderData()
+    const duplicateRegions = serviceCenters.map(r=>r.region)
+    const regions = [...new Set(duplicateRegions)]
+    const senderRegion = useWatch({ control, name: 'senderRegion' });
+    const receiverRegion = useWatch({ control, name: 'receiverRegion' })
+
+    const districtsByRegion = (region) => {
+        const regionDistricts = serviceCenters.filter(c => c.region === region);
+        const districts = regionDistricts.map(d => d.district);
+        return districts;
+    }
+    const handleSendParcel  = data =>{
+         console.log(data)
+         const isDocument = data.parcelType == "document";
+         const isSameDistrict = data.senderDistrict == data.receiverDistrict;
+         const parcelWeight = parseFloat(data.parcelWeight);
+         let cost = 0;
+         if(isDocument){
+              cost = isSameDistrict ? 60 : 80;
+         }
+         else{
+              if(parcelWeight <=3){
+                cost = isSameDistrict ? 110 : 150;
+              }
+              else{
+                const minCharge = isSameDistrict ? 110 : 150;
+                const extraWeight = parcelWeight - 3;
+                const extraCharge = isSameDistrict ? extraWeight * 40 : extraWeight * 40 + 40;
+
+                cost = minCharge + extraCharge;
+              }
+         }
+         data.cost = cost
+        Swal.fire({
+            title: "Agree with the Cost?",
+            text: `You will be charged ${cost} taka!`,
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonColor: "#3085d6",
+            cancelButtonColor: "#d33",
+            confirmButtonText: "Confirm and Continue Payment!"
+        }).then((result) => {
+            if (result.isConfirmed) {
+
+                // save the parcel info to the database
+                axiosSecure.post('/parcels', data)
+                    .then(res => {
+                        console.log('after saving parcel', res.data);
+                        if (res.data.insertedId) {
+                            navigate('/dashboard/my-parcels')
+                            Swal.fire({
+                                position: "top",
+                                icon: "success",
+                                title: "Parcel has created. Please Pay",
+                                showConfirmButton: false,
+                                timer: 2500
+                            });
+                        }
+                    })
+
+
+            }
+        });
+    }
+    // console.log(region)
+    return (
+         <div>
+            <h2 className="text-5xl font-bold text-center mt-4 text-secondary">Send A Parcel</h2>
+            <form  onSubmit={handleSubmit(handleSendParcel )} className='mt-12 p-4 text-black'>
+                {/* parcel type*/}
+                <div>
+                    <label className="label mr-4">
+                        <input type="radio" {...register('parcelType')} value="document" className="radio" defaultChecked />
+                        Document
+                    </label>
+                    <label className="label">
+                        <input type="radio" {...register('parcelType')} value="non-document" className="radio" />
+                        Non-Document
+                    </label>
+                </div>
+
+                {/* parcel info: name, weight */}
+                <div className='grid grid-cols-1 md:grid-cols-2 gap-12 my-8'>
+                    <fieldset className="fieldset">
+                        <label className="label">Parcel Name</label>
+                        <input type="text" {...register('parcelName',{required:true})} className="input w-full" placeholder="Parcel Name" />
+                    {errors && <p className='text-red-500'>Please Enter the value</p>}
+                    </fieldset>
+                    <fieldset className="fieldset">
+                        <label className="label">Parcel Weight (kg)</label>
+                       
+                        <input type="number" {...register('parcelWeight',{required:true})} className="input w-full" placeholder="Parcel Weight" />
+                       {errors && <p className='text-red-500'>Please Enter the value</p>}
+
+                    </fieldset>
+
+                </div>
+
+                {/* two column */}
+                <div className='grid grid-cols-1 md:grid-cols-2 gap-12'>
+                    {/* sender Details */}
+
+                    <fieldset className="fieldset">
+                        <h4 className="text-2xl font-semibold">Sender Details</h4>
+                        {/* sender name */}
+                        <label className="label">Sender Name</label>
+                        <input type="text" {...register('senderName',{required:true})}
+                            defaultValue={user.displayName}
+                            className="input w-full" placeholder="Sender Name" />
+                       {/* {errors && <p className='text-red-500'>Please Enter the value</p>} */}
+
+                        {/* sender email */}
+                        <label className="label">Sender Email</label>
+                        <input type="email" {...register('senderEmail',{required:true})}
+                        defaultValue={user.email}    className="input w-full" placeholder="Sender Email" />
+          {errors.senderEmail ?. type=='required' && <p className="text-red-500">Email is required</p>}
+
+                        {/* sender region */}
+                        <fieldset className="fieldset">
+                            <legend className="fieldset-legend">Sender Regions</legend>
+                            <select {...register('senderRegion',{required:true})} defaultValue="Pick a region" className="select">
+                                <option disabled={true}>Pick a region</option>
+                                {
+                                    regions.map((r, i) => <option key={i} value={r}>{r}</option>)
+                                }
+                            </select>
+                     {errors && <p className='text-red-500'>Please Enter the value</p>}
+
+                        </fieldset>
+
+                        {/* sender districts */}
+                        <fieldset className="fieldset">
+                            <legend className="fieldset-legend">Sender Districts</legend>
+                            <select {...register('senderDistrict',{required:true})} defaultValue="Pick a district" className="select">
+                                <option disabled={true}>Pick a district</option>
+                                {
+                                    districtsByRegion(senderRegion).map((r, i) => <option key={i} value={r}>{r}</option>)
+                                }
+                            </select>
+                            {errors && <p className='text-red-500'>Please Enter the value</p>}
+
+                        </fieldset>
+
+
+                        {/* sender address */}
+                        <label className="label mt-4">Sender Address</label>
+                        <input type="text" {...register('senderAddress',{required:true})} className="input w-full" placeholder="Sender Address" />
+
+                       {errors && <p className='text-red-500'>Please Enter the value</p>}
+
+                    </fieldset>
+                    {/* receiver Details */}
+                    <fieldset className="fieldset">
+                        <h4 className="text-2xl font-semibold">Receiver Details</h4>
+                        {/* receiver name */}
+                        <label className="label">Receiver Name</label>
+                        <input type="text" {...register('receiverName',{required:true})} className="input w-full" placeholder="Receiver Name" />
+                       {errors && <p className='text-red-500'>Please Enter the value</p>}
+
+                        {/* receiver email */}
+                        <label className="label">Receiver Email</label>
+                        <input type="email" {...register('receiverEmail',{required:true})} className="input w-full" placeholder="Receiver Email" />
+          {errors.receiverEmail ?. type=='required' && <p className="text-red-500">Email is required</p>}
+
+                        {/* receiver region */}
+                        <fieldset className="fieldset">
+                            <legend className="fieldset-legend">Receiver Regions</legend>
+                            <select {...register('receiverRegion',{required:true})} defaultValue="Pick a region" className="select">
+                                <option disabled={true}>Pick a region</option>
+                                {
+                                    regions.map((r, i) => <option key={i} value={r}>{r}</option>)
+                                }
+                            </select>
+                         {errors && <p className='text-red-500'>Please Enter the value</p>}
+
+                        </fieldset>
+
+                        {/* receiver district */}
+                        <fieldset className="fieldset">
+                            <legend className="fieldset-legend">Receiver District</legend>
+                            <select {...register('receiverDistrict',{required:true})} defaultValue="Pick a district" className="select">
+                                <option disabled={true}>Pick a district</option>
+                                {
+                                    districtsByRegion(receiverRegion).map((d, i) => <option key={i} value={d}>{d}</option>)
+                                }
+                            </select>
+                                                   {errors && <p className='text-red-500'>Please Enter the value</p>}
+
+                        </fieldset>
+
+
+                        {/* receiver address */}
+                        <label className="label mt-4">Receiver Address</label>
+                        <input type="text" {...register('receiverAddress',{required:true})} className="input w-full" placeholder="Receiver Address" />
+
+                       {errors && <p className='text-red-500'>Please Enter the value</p>}
+
+                    </fieldset>
+                </div>
+                <input type="submit" className='btn btn-primary mt-8 text-black' value="Send Parcel" />
+            </form>
+        </div>
+    );
+    
+};
+
+export default SendParcel;
