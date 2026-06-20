@@ -1,5 +1,5 @@
 import axios from 'axios';
-import React, { useEffect } from 'react';
+import  { useEffect } from 'react';
 import useAuth from './useAuth';
 import { useNavigate } from 'react-router';
 
@@ -14,7 +14,11 @@ const useAxiosSecure = () => {
     useEffect(() => {
         // intercept request
         const reqInterceptor = axiosSecure.interceptors.request.use(config => {
+            // console.log(user.accessToken)
+            // console.log(user)
+            
             config.headers.Authorization = `Bearer ${user?.accessToken}`
+
             return config
         })
 
@@ -24,7 +28,7 @@ const useAxiosSecure = () => {
         }, (error) => {
             console.log(error);
 
-            const statusCode = error.status;
+            const statusCode = error.response?.status;
             if (statusCode === 401 || statusCode === 403) {
                 logOut()
                     .then(() => {
